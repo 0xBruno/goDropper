@@ -35,7 +35,7 @@ type WindowsProcess struct {
 
 func checkError(err error) {
 	if err != nil {
-		log.Fatalln("[!] ERR:", err)
+		log.Fatalln("[!] ERR: ", err)
 	}
 }
 
@@ -126,8 +126,8 @@ func FindTarget(procname string) (pid uint32, err error) {
 			return uint32(p.ProcessID), nil
 		}
 	}
-
-	return 0, errors.New("[!] ERR: Process not found!")
+	
+	return 0, errors.New("[!] ERR: " +  procname + " not found!")
 
 }
 
